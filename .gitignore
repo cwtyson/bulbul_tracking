@@ -1,0 +1,15 @@
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+
+## File types to ignore
+**/*.DS_Store
+**/*.jpg
+**/*.Rdata
+**/*.csv
+**/*.xlsx
+Icon?
+
+## Ignore profile informatin
+/R/profile_info.R
