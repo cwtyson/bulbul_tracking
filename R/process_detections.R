@@ -18,18 +18,24 @@ conn <- DBI::dbConnect(RPostgres::Postgres(),
                        password = password)
 
 ## Tags
-tag_data <- readxl::read_excel(tag_file)  %>%
+tag_log <- readxl::read_excel(tag_file)  %>%
   clean_names() %>%
   transmute(species,
             tag = gsub("NA",NA, tag),
             bird_band,
-            start_date_time = dmy_hm(paste(date, time),
-                                     tz = "Africa/Mbabane"),
-            year = format(start_date_time, "%Y"))  %>%
-  filter(!is.na(tag)) 
+            tag_start_time = dmy_hm(paste(date, time),
+                                    tz = "Africa/Mbabane"),
+            tag_removal_time = dmy_hm(paste(tag_removal_date, 
+                                            tag_removal_time),
+                                    tz = "Africa/Mbabane"),
+            year = format(tag_start_time, "%Y"),
+            location)  %>%
+  filter(!is.na(tag)) %>% 
+  filter(species == "DCBU")  %>% 
+  filter(year == "2023")
 
 ## Keep Elke's bulbuls
-dcbu_tags <- tag_data %>% 
+dcbu_tags <- tag_log %>% 
   filter(species == "DCBU") %>% 
   pull(tag)
 

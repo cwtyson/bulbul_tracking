@@ -22,30 +22,42 @@ tag_log <- readxl::read_excel(tag_file)  %>%
                                     tz = "Africa/Mbabane"),
             year = format(tag_start_time, "%Y"),
             location)  %>%
-  filter(!is.na(tag)) %>% 
+  filter(tag != "no tag") %>% 
   filter(species == "DCBU")  %>% 
   filter(year == "2023")
 
-tagged <- unique(tag_log$bird_band)
-
 ## Individual summaries by day
 dets_sum <- dcbu_dets %>%
-  mutate(dt_r = lubridate::round_date(date_time, unit = "1 day")) %>%
+  mutate(dt_r = lubridate::floor_date(date_time, unit = "1 day")) %>%
   group_by(bird_band, grid_point, dt_r) %>%
   summarise(dets = n(),
             rssi = max(rssi))
 
+## Summary table of detections per individual per day in wide format
+sum_tab <- tag_log %>% 
+  left_join(dcbu_dets %>% 
+              mutate(dt_r = lubridate::floor_date(date_time, unit = "1 day")) %>%
+              group_by(bird_band, dt_r) %>%
+              summarise(dets = n()) %>% 
+              pivot_wider(names_from = dt_r,
+                          values_from = dets))
+
+
+## Values for plotting
 min_rssi <- min(dets_sum$rssi)
 max_rssi <- max(dets_sum$rssi)
 min_dets <- min(dets_sum$dets)
 max_dets <- max(dets_sum$dets)
-min_date <- min(spmo_dets$date_time)
-max_date <- max(spmo_dets$date_time)
+min_date <- min(dets_sum$dt_r)
+max_date <- max(dets_sum$dt_r)
 
-## For each, save a timeline
+## Tagged birds
+tagged <- unique(tag_log$bird_band)
+
+## For each, save a timeline 
 for(bb in tagged){
   
-  # bb = "4A94812"
+  # bb = tagged[1]
   
   ## Summarize to plot
   dets_2plot <- dcbu_dets %>%
@@ -94,3 +106,75 @@ for(bb in tagged){
   cat("Saved tag", bb, "\n")
   
 }
+
+
+## Join node to pole point
+node_pts <- sf::read_sf(grid_point_file) %>%
+  transmute(grid_point  = name) %>%
+  mutate(x = as.matrix((sf::st_coordinates(.data$geometry)), ncol = 2)[,1],
+         y = as.matrix((sf::st_coordinates(.data$geometry)), ncol = 2)[,2])
+
+## Summarize per tag, per node, per day
+dets_sum <- dcbu_dets %>%
+  mutate(dt_r = lubridate::floor_date(date_time, unit = "1 day")) %>%
+  group_by(bird_band, grid_point, dt_r) %>%
+  summarise(dets = n(),
+            rssi = mean(rssi))
+
+min_rssi <- min(dets_sum$rssi)
+max_rssi <- max(dets_sum$rssi)
+min_dets <- min(dets_sum$dets)
+max_dets <- max(dets_sum$dets)
+
+
+## For band, save a timeline
+for(bb in tagged){
+  
+  ## bb = tagged[1]
+  
+  dets_map <- dets_sum %>%
+    filter(bird_band == bb) %>% 
+    mutate(dt_r_f = format(dt_r, "%d-%m")) %>%
+    left_join(node_pts) %>%
+    left_join(tag_log %>%
+                select(bird_band,
+                       year,
+                       location) %>%
+                distinct(bird_band,.keep_all = T))
+  
+  if(nrow(dets_map) > 1){
+    
+    (dets_tag_map <- ggplot(dets_map) +
+       geom_point(aes(x,y),
+                  node_pts,
+                  size = 0.8,
+                  alpha = 0.3) +
+       geom_point(aes(x,y,color = rssi,size=dets)) +
+       facet_wrap(.~dt_r) +
+       coord_equal() +
+       theme_void() +
+       labs(title = paste(bb, " - ", unique(dets_map$location))) +
+       ggplot2::scale_colour_gradientn(colours = wesanderson::wes_palette("Zissou1", 100, type = "continuous"),
+                                       name = "Mean RSSI",
+                                       limits = c(min_rssi,max_rssi)) +
+       ggplot2::scale_size_continuous(limits = c(min_dets,max_dets)))
+    
+    
+  }
+  
+  if(nrow(dets_map) == 0){
+    
+    
+    dets_tag_map <- ggplot(dets_map) +
+      labs(title = bb)
+    
+  }
+  
+  
+  ## Save
+  suppressMessages(ggplot2::ggsave(paste0("./plots/maps/",bb,".jpg"),
+                                   plot = dets_tag_map,
+                                   scale = 1.5))
+  
+}
+
