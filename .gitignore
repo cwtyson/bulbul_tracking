@@ -7,9 +7,11 @@
 **/*.DS_Store
 **/*.jpg
 **/*.Rdata
+**/*.RDS
 **/*.csv
 **/*.xlsx
 Icon?
 
 ## Ignore profile informatin
 /R/profile_info.R
+
